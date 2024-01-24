@@ -1,0 +1,39 @@
+{
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+    // Python settings
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        },
+        "editor.rulers": [
+            100
+        ]
+    },
+    "pylint.severity": {
+        "convention": "Information",
+        "error": "Error",
+        "fatal": "Error",
+        "refactor": "Hint",
+        "warning": "Warning",
+        "W0611": "Error",
+        "undefined-variable": "Warning"
+    },
+    "isort.args": [
+        "--profile",
+        "black",
+        "--fss",
+    ],
+    "python.testing.cwd": "${workspaceFolder}",
+    "python.testing.pytestArgs": [
+        ".",
+        "--cov",
+        ".",
+        "--cov-report",
+        "xml"
+    ],
+    "python.testing.pytestEnabled": true,
+    "python.testing.unittestEnabled": false,
+}

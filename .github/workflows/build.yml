@@ -1,0 +1,36 @@
+name: Test
+on:
+  pull_request:
+    branches:
+      - "**"
+
+# Only allow one build per branch at a time.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.run_number }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+          architecture: "x64"
+      - name: Set up virtualenv
+        shell: bash
+        run: >
+          python3.11 -m venv .venv &&
+          . .venv/bin/activate &&
+          python -m pip install -r requirements.txt
+      - name: Run `pylint`
+        shell: bash
+        run: >
+          . .venv/bin/activate &&
+          pylint *.py
+      - name: Run `pytest`
+        shell: bash
+        run: >
+          . .venv/bin/activate &&
+          pytest

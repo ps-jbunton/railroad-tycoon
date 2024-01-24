@@ -1,0 +1,20 @@
+# General python
+black
+ipykernel
+isort
+numpy
+pandas
+
+
+# CI/testing
+pylint
+mypy
+pytest
+pytest-cov
+
+# Simulation
+simpy == 4.1.1
+geopandas
+
+# Visualization
+plotly == 5.18.0
