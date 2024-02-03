@@ -595,6 +595,12 @@ class RailNetwork:
         ), "Edge is not in graph--segment does not exist!"
         return self.rail_network_graph[node_id1][node_id2][weight]
 
+    def get_destination_rail_id_from_payload(self, payload: Payload) -> int:
+        """
+        Given a Payload object, compute the rail ID nearest to its destination.
+        """
+        raise NotImplementedError
+
     def get_node_lat_lon(self, node_id: int):
         """
         Given a node id in the current rail_network_graph, extract the latitude and longitude of the
@@ -733,7 +739,7 @@ class ParallelVehicle(Vehicle):
                 # Should that be the job of Vehicle? RailNetwork?  Or a separate Router??
                 if self.current_payload:
                     destination_rail_node_id = (
-                        self._rail_network.get_nearest_rail_id_from_payload(
+                        self._rail_network.get_destination_rail_id_from_payload(
                             self.current_payload[0]
                         )
                     )
@@ -904,7 +910,7 @@ class ParallelVehicle(Vehicle):
     def get_payload(self):
         """
         Gets the next Payload from the current_payload list.  Currently calls `pop()` so this is a
-        LIFO operation.
+        LIFO operation.  Adds a time delay to account for handling of the vehicle.
         """
         if self.current_payload:
             time_to_load_hrs = self._time_to_load_hrs()
@@ -918,7 +924,7 @@ class ParallelVehicle(Vehicle):
     def put_payload(self, payload: Payload):
         """
         Puts a given Payload object onto the ParallelVehicle.  Currentlly calls `.append()` so it
-        adds to the end of the list.
+        adds to the end of the list.  Adds a time delay to account for handling of the vehicle.
         """
         if len(self.current_payload) < self.capacity:
             time_to_load_hrs = self._time_to_load_hrs()
