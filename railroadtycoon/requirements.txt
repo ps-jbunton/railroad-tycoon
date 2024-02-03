@@ -13,9 +13,12 @@ pytest
 pytest-cov
 
 # Simulation
-simpy == 4.1.1
+simpy
 mesa
 geopandas
+pyarrow
 
 # Visualization
-plotly == 5.18.0
+plotly
+dash
+contextplot
