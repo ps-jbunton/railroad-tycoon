@@ -1,5 +1,5 @@
 # General python
-black
+black[jupyter]
 ipykernel
 isort
 numpy

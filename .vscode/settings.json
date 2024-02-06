@@ -1,6 +1,7 @@
 {
     "editor.formatOnSave": true,
     "editor.formatOnSaveMode": "file",
+    "notebook.formatOnSave.enabled": true,
     // Python settings
     "[python]": {
         "editor.defaultFormatter": "ms-python.black-formatter",

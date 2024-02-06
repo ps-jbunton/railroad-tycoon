@@ -2,7 +2,6 @@
 """
 Module for building and running the initial proof-of-concept simulation.
 """
-
 from abc import ABC, abstractmethod
 import random
 
@@ -268,6 +267,10 @@ class RailTerminal(PayloadLocation):
         the object (regardless of their destination) and put them in the RailTerminal's
         arrival_queue.
         """
+        print(
+            f"T = {float(self.env.now):07.03f} | "
+            + f"Parallel Vehicle {vehicle.vehicle_id} arrived at {self.name}."
+        )
 
         # While there are payloads on the vehicle, unload them into the arrivals queue.
         while vehicle.current_payload_count() > 0:
@@ -275,11 +278,11 @@ class RailTerminal(PayloadLocation):
             if payload is not None:
                 yield from self.put_in_arrival_queue(payload)
 
-        # While there is space in the vehicle and we have outbound Payloads in our departure queue,
-        # load them onto the vehicle.
+        # While there is space in the vehicle wait for Payloads and load them onto the vehicle.
         while (
-            vehicle.current_payload_count() < vehicle.payload_capacity()
-            and self.departure_queue.items
+            vehicle.current_payload_count()
+            < vehicle.payload_capacity()
+            # and self.departure_queue.items
         ):
             # Note that we do not apply any payload filtering right now, but we could.
             payload = yield from self.get_from_departure_queue()
@@ -433,7 +436,7 @@ class ContainerYard(PayloadLocation):
         # Put the new order in the wait queue of its origin.
         origin.departure_queue.put(new_order)
         print(
-            f"T = {float(self.env.now):.03f} | "
+            f"T = {float(self.env.now):07.03f} | "
             + f"Container yard {self.name} generated a new order at {new_order.origin.name}."
         )
 
@@ -762,7 +765,7 @@ class ParallelVehicle(Vehicle):
         # First, get the next node to travel to.
         next_node = self.current_route.pop(0)
         print(
-            f"T = {float(self.env.now):.03f} | "
+            f"T = {float(self.env.now):07.03f} | "
             + f"Parallel vehicle leaving {self.current_rail_node_id}, "
             + f"headed to {next_node}."
             + f"{len(self.current_payload)}/{self.capacity})"
@@ -832,7 +835,7 @@ class ParallelVehicle(Vehicle):
         """
         # Announce departure of the vehicle.
         print(
-            f"T = {float(self.env.now):.03f} | "
+            f"T = {float(self.env.now):07.03f} | "
             + f"Parallel vehicle leaving {self.current_terminal.name}"
             + f" with {len(self.current_payload)} payloads"
         )
@@ -849,7 +852,7 @@ class ParallelVehicle(Vehicle):
 
         # Announce arrival of the vehicle.
         print(
-            f"T = {float(self.env.now):.03f} | "
+            f"T = {float(self.env.now):07.03f} | "
             + f"Parallel vehicle arrived at {self.current_terminal.name}, dropping off."
         )
 
@@ -870,7 +873,7 @@ class ParallelVehicle(Vehicle):
             payload.set_location(self)
             self._report_current_state()
             print(
-                f"T = {float(self.env.now):.03f} | "
+                f"T = {float(self.env.now):07.03f} | "
                 + f"Parallel Vehicle picked up a payload at {terminal.name} "
                 + f"({len(self.current_payload)}/{self.capacity})"
             )
@@ -893,7 +896,7 @@ class ParallelVehicle(Vehicle):
             yield from self.current_terminal.put_in_arrival_queue(payload)
             self._report_current_state()
             print(
-                f"T = {float(self.env.now):.03f} | "
+                f"T = {float(self.env.now):07.03f} | "
                 + f"Parallel Vehicle dropped off a payload at {self.current_terminal.name} "
                 + f"({len(self.current_payload)}/{self.capacity})"
             )
@@ -926,7 +929,13 @@ class ParallelVehicle(Vehicle):
         Puts a given Payload object onto the ParallelVehicle.  Currentlly calls `.append()` so it
         adds to the end of the list.  Adds a time delay to account for handling of the vehicle.
         """
-        if len(self.current_payload) < self.capacity:
+        if self.current_payload_count() < self.capacity:
+            print(
+                f"T = {float(self.env.now):07.03f} | "
+                + f"Parallel vehicle at {self.current_terminal} "
+                + "loaded a new Payload. "
+                + f"{len(self.current_payload)}/{self.capacity})"
+            )
             time_to_load_hrs = self._time_to_load_hrs()
             # Delay for processing.
             payload = yield self.env.timeout(delay=time_to_load_hrs, value=payload)
@@ -1040,7 +1049,7 @@ class Truck(PayloadLocation):
 
             # Drive to the current destination (assumes we have one!)
             print(
-                f"T = {float(self.env.now):.03f} | "
+                f"T = {float(self.env.now):07.03f} | "
                 + f"Truck {self.vehicle_id} departing {self.current_location.name} "
                 + f"for {self.current_destination.name}"
             )
@@ -1065,7 +1074,7 @@ class Truck(PayloadLocation):
         # Mark that the vehicle has arrived.
         self.current_location = self.current_destination
         print(
-            f"T = {float(self.env.now):.03f} | Truck {self.vehicle_id}"
+            f"T = {float(self.env.now):07.03f} | Truck {self.vehicle_id}"
             + f" arrived at {self.current_location.name}"
         )
         # Log this in the report.
@@ -1093,7 +1102,7 @@ class Truck(PayloadLocation):
             # Log that we just dropped off a payload.
             self._report_current_state()
             print(
-                f"T = {float(self.env.now):.03f} | Truck {self.vehicle_id}"
+                f"T = {float(self.env.now):07.03f} | Truck {self.vehicle_id}"
                 + f" dropped off a payload at {self.current_location.name}"
                 + f" ({len(self.current_payload)}/{self.capacity})"
             )
@@ -1118,7 +1127,7 @@ class Truck(PayloadLocation):
             # Log that we just picked up a payload.
             self._report_current_state()
             print(
-                f"T = {float(self.env.now):.03f} | Truck {self.vehicle_id} "
+                f"T = {float(self.env.now):07.03f} | Truck {self.vehicle_id} "
                 + f"picked up payload destined for {payload.destination.name} "
                 + f"from {self.current_location.name} ({len(self.current_payload)}/{self.capacity})"
             )
@@ -1145,7 +1154,7 @@ class Truck(PayloadLocation):
             # Log that we picked up another payload.
             self._report_current_state()
             print(
-                f"T = {float(self.env.now):.03f} | Truck {self.vehicle_id} "
+                f"T = {float(self.env.now):07.03f} | Truck {self.vehicle_id} "
                 + f"picked up a payload destined for {payload.destination.name} from "
                 + f"{self.current_location.name} ({len(self.current_payload)}/{self.capacity})"
             )
@@ -1180,7 +1189,7 @@ class Truck(PayloadLocation):
         """
         return {
             "TIME": self.env.now,
-            "LATITUDE": self.current_location.location.get_latitude(),
-            "LONGITUDE": self.current_location.location.get_longitude(),
+            "LATITUDE": self.current_location.get_location().get_latitude(),
+            "LONGITUDE": self.current_location.get_location().get_longitude(),
             "CURRENT_LOAD": len(self.current_payload),
         }
