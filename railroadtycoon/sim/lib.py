@@ -271,22 +271,16 @@ class RailTerminal(PayloadLocation):
             f"T = {float(self.env.now):07.03f} | "
             + f"Parallel Vehicle {vehicle.vehicle_id} arrived at {self.name}."
         )
-
         # While there are payloads on the vehicle, unload them into the arrivals queue.
         while vehicle.current_payload_count() > 0:
-            payload = vehicle.get_payload()
+            payload = yield from vehicle.get_payload()
             if payload is not None:
                 yield from self.put_in_arrival_queue(payload)
 
         # While there is space in the vehicle wait for Payloads and load them onto the vehicle.
-        while (
-            vehicle.current_payload_count()
-            < vehicle.payload_capacity()
-            # and self.departure_queue.items
-        ):
-            # Note that we do not apply any payload filtering right now, but we could.
+        while vehicle.current_payload_count() < vehicle.payload_capacity():
             payload = yield from self.get_from_departure_queue()
-            vehicle.put_payload(payload)
+            yield from vehicle.put_payload(payload)
 
     def put_in_arrival_queue(self, payload: Payload):
         """
@@ -557,7 +551,7 @@ class RailNetwork:
             source=start_node_id,
             target=end_node_id,
             weight=weights,
-        )
+        )[1:]
 
     def register_terminal_at_node(
         self,
@@ -595,7 +589,7 @@ class RailNetwork:
         weight = weight_col or self._edges_weight_col
         assert self.rail_network_graph.has_edge(
             node_id1, node_id2
-        ), "Edge is not in graph--segment does not exist!"
+        ), f"Edge is not in graph--segment ({node_id1}, {node_id2}) does not exist!"
         return self.rail_network_graph[node_id1][node_id2][weight]
 
     def get_destination_rail_id_from_payload(self, payload: Payload) -> int:
@@ -741,11 +735,16 @@ class ParallelVehicle(Vehicle):
                 # Then we can get just query the RailNetwork for the route.
                 # Should that be the job of Vehicle? RailNetwork?  Or a separate Router??
                 if self.current_payload:
-                    destination_rail_node_id = (
-                        self._rail_network.get_destination_rail_id_from_payload(
-                            self.current_payload[0]
+                    if self.current_destination is None:
+                        destination_rail_node_id = (
+                            self._rail_network.get_destination_rail_id_from_payload(
+                                self.current_payload[0]
+                            )
                         )
-                    )
+                    else:
+                        destination_rail_node_id = (
+                            self.current_destination.get_location().get_rail_node_id()
+                        )
                 else:
                     # TODO: Have some sort of failsafe behavior? Return to previous terminal?  Right
                     # now we just keep waiting.
@@ -759,16 +758,16 @@ class ParallelVehicle(Vehicle):
     def traverse_along_route(self):
         """
         Logic for traversing along the current route.  Pops the next rail_node_id from the route,
-        computes how long it will take to travel this distance, delays for this time, then updates
+        computes how long it will take to travel this disftance, delays for this time, then updates
         the current_rail_node_id.
         """
         # First, get the next node to travel to.
         next_node = self.current_route.pop(0)
         print(
             f"T = {float(self.env.now):07.03f} | "
-            + f"Parallel vehicle leaving {self.current_rail_node_id}, "
-            + f"headed to {next_node}."
-            + f"{len(self.current_payload)}/{self.capacity})"
+            + f"Parallel vehicle leaving Rail ID {self.current_rail_node_id}, "
+            + f"headed to Rail ID {next_node}."
+            + f"({len(self.current_payload)}/{self.capacity})"
         )
 
         # If there is still more track to traverse after this node, keep the current speed.
@@ -784,10 +783,11 @@ class ParallelVehicle(Vehicle):
         time_to_travel_hrs = self._compute_travel_time_hrs(
             distance_to_travel_m, self.current_velocity_ms, terminal_velocity
         )
+        self.current_velocity_ms = terminal_velocity
 
         # Delay the appropriate time, updating the current_rail_node_id when done.
         self.current_rail_node_id = yield self.env.timeout(
-            time_to_travel_hrs, value=self.current_rail_node_id
+            time_to_travel_hrs, value=next_node
         )
         # Check if we arrived at a terminal at this node.
         self.current_terminal = self._rail_network.check_for_rail_terminal(
@@ -819,13 +819,8 @@ class ParallelVehicle(Vehicle):
         --------
         How long it will take the vehicle to travel this distance, in hours.
         """
-        return (
-            2.0
-            * distance_to_travel_m
-            / (initial_velocity_ms + terminal_velocity_ms)
-            / 60
-            / 60
-        )
+        # TODO: Right now this just assumes 10-20 mps travel with randomization.
+        return random.uniform(distance_to_travel_m / 10, distance_to_travel_m / 20)
 
     def drive_between_terminals(self):
         """
@@ -920,6 +915,12 @@ class ParallelVehicle(Vehicle):
             payload = yield self.env.timeout(
                 delay=time_to_load_hrs, value=self.current_payload.pop()
             )
+            print(
+                f"T = {float(self.env.now):07.03f} | "
+                + f"Parallel vehicle {self.vehicle_id} "
+                + "unloaded a Payload. "
+                + f"({self.current_payload_count()}/{self.capacity})"
+            )
             self._report_current_state()
             return payload
         return None
@@ -930,16 +931,16 @@ class ParallelVehicle(Vehicle):
         adds to the end of the list.  Adds a time delay to account for handling of the vehicle.
         """
         if self.current_payload_count() < self.capacity:
-            print(
-                f"T = {float(self.env.now):07.03f} | "
-                + f"Parallel vehicle at {self.current_terminal} "
-                + "loaded a new Payload. "
-                + f"{len(self.current_payload)}/{self.capacity})"
-            )
             time_to_load_hrs = self._time_to_load_hrs()
             # Delay for processing.
             payload = yield self.env.timeout(delay=time_to_load_hrs, value=payload)
             self.current_payload.append(payload)
+            print(
+                f"T = {float(self.env.now):07.03f} | "
+                + f"Parallel vehicle {self.vehicle_id} "
+                + "loaded a new Payload. "
+                + f"({self.current_payload_count()}/{self.capacity})"
+            )
             self._report_current_state()
 
     def _report_current_state(self):
